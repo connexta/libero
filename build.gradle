@@ -1,0 +1,9 @@
+ allprojects  {
+   apply plugin: 'maven'
+}
+subprojects {
+  repositories {
+    mavenLocal()
+    mavenCentral()
+  }
+}

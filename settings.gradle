@@ -1,0 +1,4 @@
+rootProject.name = 'libero-all'
+include 'libero'
+
+project(':libero').projectDir = "$rootDir/libero" as File
