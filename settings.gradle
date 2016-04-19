@@ -1,6 +1,14 @@
-rootProject.name = 'libero-all'
-include 'libero'
-include 'libera'
+def subprojects = [
+        'libero-core',
+        'libero-distribution',
+        'libera'
+]
 
-project(':libero').projectDir = "$rootDir/libero" as File
-project(':libera').projectDir = "$rootDir/libera" as File
+
+rootProject.name = 'libero-all'
+
+include(subprojects as String[])
+
+rootProject.children.each { prj ->
+    prj.projectDir = new File("$rootDir/subprojects/$prj.name")
+}

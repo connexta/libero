@@ -1,3 +1,4 @@
+before_script: export M2_HOME=/usr/local/maven
 language: groovy
 notifications:
   slack:

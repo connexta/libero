@@ -1,19 +1,84 @@
-allprojects {
-    apply plugin: 'groovy'
-    apply plugin: 'maven'
-    apply plugin: 'build-dashboard'
+subprojects {
+  apply plugin: 'groovy'
+  apply plugin: 'maven'
+  apply plugin: 'signing'
+  apply plugin: 'build-dashboard'
+
+  version = '1.0.0-SNAPSHOT'
+
+  task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+  }
+
+  task groovydocJar(type: Jar) {
+    classifier = 'groovydoc'
+    from groovydoc
+  }
+
+  task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+  }
+
+  artifacts {
+    if (!version.matches(".*\\SNAPSHOT\\b.*")) {
+        archives javadocJar, groovydocJar, sourcesJar
+    }
+  }
+
+  signing {
+    if (!version.matches(".*\\SNAPSHOT\\b.*")) {
+      sign configurations.archives
+    }
+  }
+
+  uploadArchives {
+    repositories {
+      mavenDeployer {
+        if (!version.matches(".*\\SNAPSHOT\\b.*")) {
+          beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+        }
+
+        if (project.hasProperty('ossrhUsername') && project.hasProperty('ossrhPassword')) {
+          repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+            authentication(userName: ossrhUsername, password: ossrhPassword)
+          }
+
+          snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+            authentication(userName: ossrhUsername, password: ossrhPassword)
+          }
+        }
+
+        pom.project {
+
+          scm {
+            connection 'scm:git:https://github.com/connexta/libero.git'
+            developerConnection 'scm:git:https://github.com/connexta/libero.git'
+            url 'https://gitub.com/connexta/libero.git'
+          }
+
+          licenses {
+            license {
+              name 'The Apache License, Version 2.0'
+              url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 subprojects {
-    repositories {
-        mavenLocal()
-        mavenCentral()
-    }
+  repositories {
+      mavenLocal()
+      mavenCentral()
+  }
 
-    test {
-        testLogging {
-            showStandardStreams = true
-            exceptionFormat = 'full'
-        }
-    }
+  test {
+      testLogging {
+          exceptionFormat = 'full'
+      }
+  }
 }
