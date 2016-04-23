@@ -15,25 +15,13 @@ import java.text.SimpleDateFormat
 
 class Libero {
 
-    Config config
     Util util
 
     Libero() {
-        this.config = new Config()
         this.util = new Util()
     }
 
-    Libero(Config config) {
-        this.config = config
-    }
-
-    Libero(Config config, Util util) {
-        this.config = config
-        this.util = util
-    }
-
-    def run = { ->
-
+    def run(Config config) {
         Date date = new Date()
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         config.projectProperties.date = date
@@ -56,8 +44,7 @@ class Libero {
                     println "Response must be either [y/n]"
                     System.exit(1)
             }
-        }
-        else {
+        } else {
             executeRelease(config)
         }
     }
@@ -66,7 +53,7 @@ class Libero {
      * Executes the build and deploy of the release
      * @param config Libero configuration
      */
-    def runBuild(Config config) {
+    private def runBuild(Config config) {
         String gitCommand = "git"
         String gitCheckoutCommand = "${gitCommand} checkout ${config.releaseName}"
         String gitPushCommand = "${gitCommand} push ${config.destRemote}"
@@ -81,8 +68,7 @@ class Libero {
 
         if (config.quickBuild) {
             buildCommand = "${mavenCommand} ${quickBuildParams} clean install"
-        }
-        else {
+        } else {
             buildCommand = "${mavenCommand} clean install"
         }
         util.executeCommand(buildCommand, config.projectDir)
@@ -108,7 +94,7 @@ class Libero {
      * @param config Libero Configuration
      * @return
      */
-    def executeRelease(Config config) {
+    private def executeRelease(Config config) {
         prepareRelease(config)
         runBuild(config)
     }
@@ -118,7 +104,7 @@ class Libero {
      * @param config Libero config
      * @return
      */
-    def prepareRelease(Config config) {
+    private def prepareRelease(Config config) {
 
         // Define Commands
         String gitCommand = "git"
@@ -142,7 +128,7 @@ class Libero {
         util.executeCommand(mavenCommitVersionCommand, config.projectDir)
 
         // Pre-Release property updates
-        config.preProps.each{ k, v ->
+        config.preProps.each { k, v ->
             util.executeCommand("sed -i '' \"s|<${k}>[^<>]*</${k}>|<${k}>${v}</${k}>|g\" pom.xml", config.projectDir)
         }
         util.executeCommand(gitAddCommand, config.projectDir)
@@ -151,7 +137,7 @@ class Libero {
         util.executeCommand(setDevVersionCommand, config.projectDir)
         util.executeCommand(mavenCommitVersionCommand, config.projectDir)
         // Post-Release property updates
-        config.postProps.each{ k, v ->
+        config.postProps.each { k, v ->
             util.executeCommand("sed -i '' \"s|<${k}>[^<>]*</${k}>|<${k}>${v}</${k}>|g\" pom.xml", config.projectDir)
         }
         util.executeCommand(gitAddCommand, config.projectDir)

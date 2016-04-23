@@ -24,7 +24,7 @@ class Config {
     boolean force
     Util util = new Util()
 
-    public loadConfig = { ->
+    def loadConfig() {
         def project = load(configFile).project
 
         // Git settings
@@ -53,13 +53,14 @@ class Config {
         resolveProperties()
     }
 
-    public printConfig = { ->
+    def printConfig() {
         println "============== RELEASE PARAMETERS =============="
         println "____________ GENERAL ____________"
         println "Project Directory: ${projectDir}"
         println "Project Name: ${projectName}"
         println "Config File: ${configFile}"
         println "Dry Run: ${dryRun}"
+        println "Force: ${force}"
         println "______________ GIT ______________"
         println "Source git Remote: ${sourceRemote}"
         println "Source git Ref: ${ref}"

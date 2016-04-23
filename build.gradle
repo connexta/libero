@@ -1,9 +1,19 @@
- allprojects  {
-   apply plugin: 'maven'
+allprojects {
+    apply plugin: 'groovy'
+    apply plugin: 'maven'
+    apply plugin: 'build-dashboard'
 }
+
 subprojects {
-  repositories {
-    mavenLocal()
-    mavenCentral()
-  }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+
+    test {
+        testLogging {
+            showStandardStreams = true
+            exceptionFormat = 'full'
+        }
+    }
 }

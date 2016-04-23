@@ -1,0 +1,18 @@
+project:
+  git:
+    source:
+      remote: "origin"
+      ref: "master"
+    destination:
+      remote: "origin"
+      branch: "master"
+      push: false
+  maven:
+    repo: "foo::default::https://bar.baz/nexus/content/repositories/releases/"
+    quickbuild: false
+  settings:
+    dryRun: false
+    force: false
+  versions:
+    release: ""
+    development: ""
