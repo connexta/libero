@@ -1,5 +1,5 @@
 before_script: export M2_HOME=/usr/local/maven
-after_success: '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && [ "${TRAVIS_SECURE_ENV_VARS}" = "true" ] && gradle uploadArchives -DossrhUsername=$CI_DEPLOY_USERNAME -DossrhPassword=$CI_DEPLOY_PASSWORD'
+aftger_success: '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && [ "${TRAVIS_SECURE_ENV_VARS}" = "true" ] && gradle uploadArchives -PossrhUsername=$CI_DEPLOY_USERNAME -PossrhPassword=$CI_DEPLOY_PASSWORD'
 language: groovy
 notifications:
   slack:
