@@ -54,5 +54,6 @@ class Config {
         this.destBranch = util.replaceProperties(destBranch, projectProperties)
         this.releaseVersion = util.replaceProperties(releaseVersion, projectProperties)
         this.nextVersion = util.replaceProperties(nextVersion, projectProperties)
+        this.releaseName = util.replaceProperties(releaseName, projectProperties)
     }
 }

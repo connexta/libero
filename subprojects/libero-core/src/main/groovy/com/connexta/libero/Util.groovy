@@ -133,6 +133,7 @@ def static printConfig(Options options, Config config) {
     println "Source git Ref: ${config.ref}"
     println "Destination git Remote: ${config.destRemote}"
     println "Destination git Branch: ${config.destBranch}"
+    println "Release Tag Name: ${config.releaseName}"
     println "Push Git tags/commits: ${options.gitPush}"
     println "_____________ MAVEN _____________"
     println "Source Version: ${config.startVersion}"
