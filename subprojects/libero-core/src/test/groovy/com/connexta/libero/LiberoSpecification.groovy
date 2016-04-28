@@ -132,6 +132,18 @@ class LiberoSpecification extends Specification {
             config.releaseVersion == "${config.projectProperties.baseVersion}-${config.projectProperties.timestamp}"
     }
 
+    def "it should create a tag containing the resolved release version when a release version conatins a property reference"() {
+        setup: "creating config with release properties"
+        minimumConfig.releaseVersion = '${baseVersion}-${timestamp}'
+        minimumConfig.nextVersion = '${baseVersion}-SNAPSHOT'
+
+        when:
+        libero.run(dryRunNoPushOptions, minimumConfig)
+        then:
+        minimumConfig.releaseName == "${minimumConfig.projectName}-${minimumConfig.projectProperties.baseVersion}-${minimumConfig.projectProperties.timestamp}"
+        minimumConfig.nextVersion == "${minimumConfig.projectProperties.baseVersion}-SNAPSHOT"
+    }
+
     @Ignore
     def "it should update properties in prior to release"() {
         setup: "create config with property replacements"

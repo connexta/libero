@@ -49,7 +49,7 @@ class Libero {
         finalizeConfig(config)
 
         Date date = new Date()
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HHmmss'Z'");
         config.projectProperties.date = date
         config.projectProperties.timestamp = dateFormat.format(date)
 
