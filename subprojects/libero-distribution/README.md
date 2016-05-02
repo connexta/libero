@@ -97,19 +97,14 @@ I Release You!
      destination:
        remote: "origin"
        branch: "master"
-       push: false
    maven:
      repo: "releases:default:http://nexus.fake.site/nexus/content/repositories/releases/"
-     quickbuild: true
      properties:
        pre-release:
          foo.property: "barValue"
          bar.property: "fooValue"
        post-release:
          this: "that"
-   settings:
-     dryRun: true
-     force: false
    versions:
      release: "1.2.3"
      development: "1.2.4-SNAPSHOT"
