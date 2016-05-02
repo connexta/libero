@@ -17,11 +17,20 @@ class TestProject extends Specification {
 
         ProjectUnderTest(Libero libero, String projectInfo, Project nextProject) {
             super(libero, projectInfo, nextProject)
+            config.loadConfig(new File(getClass().getResource("/project.yml").toURI()))
+        }
+
+        ProjectUnderTest(Libero libero, String projectInfo, String expectedReleaseVersion,
+                         String expectedNextVersion, Project nextProject) {
+            super(libero, projectInfo, nextProject)
+
+            config.loadConfig(new File(getClass().getResource("/project.yml").toURI()))
+            config.releaseVersion = expectedReleaseVersion
+            config.nextVersion = expectedNextVersion
         }
 
         @Override
         protected Config loadConfig() {
-            config.loadConfig(new File(getClass().getResource("/project.yml").toURI()))
             return config
         }
     }
@@ -185,6 +194,42 @@ class TestProject extends Specification {
         thirdProject.config.projectDir == System.getProperty('user.dir') + File.separator + project3.name
         thirdProject.config.releaseVersion == project3.releaseVersion
         thirdProject.config.nextVersion == project3.nextVersion
+        thirdProject.config.preProps == [
+                "${project1.name}.version": "${project1.releaseVersion}",
+                "${project2.name}.version": "${project2.releaseVersion}"
+        ]
+        thirdProject.config.postProps == [
+                "${project1.name}.version": "${project1.nextVersion}",
+                "${project2.name}.version": "${project2.nextVersion}"
+        ]
+    }
+
+    def "Release multiple projects with no versions specified"() {
+        given:
+        def thirdProject =
+                new ProjectUnderTest(libero, "${project3.name}", project3.releaseVersion, project3.nextVersion, Project.NO_OP_PROJECT)
+        def secondProject =
+                new ProjectUnderTest(libero, "${project2.name}", project2.releaseVersion, project2.nextVersion, thirdProject)
+        def firstProject =
+                new ProjectUnderTest(libero, "${project1.name}", project1.releaseVersion, project1.nextVersion, secondProject)
+
+        when:
+        firstProject.release(Mock(Options))
+
+        then:
+        libero.run(firstProject.config) >> { Config c -> c == firstProject.config }
+        libero.run(secondProject.config) >> { Config c -> c == secondProject.config }
+        libero.run(thirdProject.config) >> { Config c -> c == thirdProject.config }
+
+        secondProject.config.projectDir == System.getProperty('user.dir') + File.separator + project2.name
+        secondProject.releaseVersion == project2.releaseVersion
+        secondProject.nextVersion == project2.nextVersion
+        secondProject.config.preProps == ["${project1.name}.version": "${project1.releaseVersion}"]
+        secondProject.config.postProps == ["${project1.name}.version": "${project1.nextVersion}"]
+
+        thirdProject.config.projectDir == System.getProperty('user.dir') + File.separator + project3.name
+        thirdProject.releaseVersion == project3.releaseVersion
+        thirdProject.nextVersion == project3.nextVersion
         thirdProject.config.preProps == [
                 "${project1.name}.version": "${project1.releaseVersion}",
                 "${project2.name}.version": "${project2.releaseVersion}"

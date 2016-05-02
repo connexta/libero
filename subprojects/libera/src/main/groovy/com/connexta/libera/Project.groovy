@@ -1,12 +1,9 @@
 package com.connexta.libera
 
-import static com.connexta.libero.Util.printConfig
-
 import com.connexta.libero.Config
 import com.connexta.libero.Libero
 import com.connexta.libero.Options
 import groovy.transform.PackageScope
-
 
 /**
  * Class that represents a chain of projects to be released. Each project contains a name, a release
@@ -15,10 +12,10 @@ import groovy.transform.PackageScope
 class Project {
     final Libero libero
     final String projectName
-    final String releaseVersion
-    final String nextVersion
     final Project nextProject;
     Project previousProject = null;
+    String releaseVersion
+    String nextVersion
 
     // Project class that doesn't release anything. Used as the last project in the release chain.
     @PackageScope
@@ -89,20 +86,20 @@ class Project {
     }
 
     private doRelease(Options options, Config config) {
-
-        println "Releasing project ${projectName} ${releaseVersion} using the following configuration:"
-        printConfig(options, config)
-
         libero.run(options, config)
+
+        this.releaseVersion = config.releaseVersion
+        this.nextVersion = config.nextVersion
+
         nextProject.release(options)
     }
 
     private getConfig() {
         def config = loadConfig()
 
-        config.projectName = projectName
-        config.releaseVersion = releaseVersion
-        config.nextVersion = nextVersion ?: config.nextVersion
+        config.projectName = this.projectName
+        config.releaseVersion = this.releaseVersion ?: config.releaseVersion
+        config.nextVersion = this.nextVersion ?: config.nextVersion
         config.projectDir = System.getProperty('user.dir') + File.separator + projectName
 
         config.preProps = [:]
