@@ -4,7 +4,7 @@ subprojects {
   apply plugin: 'signing'
   apply plugin: 'build-dashboard'
 
-  version = '1.0.0-SNAPSHOT'
+  version = '1.0.0'
 
   task javadocJar(type: Jar) {
     classifier = 'javadoc'
@@ -51,6 +51,23 @@ subprojects {
         }
 
         pom.project {
+
+          name 'libero'
+          description 'automate maven/git releases'
+          url 'https://github.com/connexta/libero'
+
+          developers {
+            developer {
+              id 'oconnormi'
+              name 'Michael O\'Connor'
+              email 'michael.oconnor@connexta.com'
+            }
+            developer {
+              id 'lessarderic'
+              name 'Eric Lessard'
+              email 'eric.lessard@connexta.com'
+            }
+          }
 
           scm {
             connection 'scm:git:https://github.com/connexta/libero.git'
