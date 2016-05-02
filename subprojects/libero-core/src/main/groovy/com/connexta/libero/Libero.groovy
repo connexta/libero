@@ -3,6 +3,7 @@ package com.connexta.libero
 import org.ajoberstar.grgit.Grgit
 import org.apache.maven.shared.invoker.DefaultInvocationRequest
 import org.apache.maven.shared.invoker.DefaultInvoker
+import org.apache.maven.shared.invoker.InvocationResult
 import org.apache.maven.shared.invoker.InvocationRequest
 import org.apache.maven.shared.invoker.Invoker
 
@@ -126,6 +127,7 @@ class Libero {
      * Prepares the release by updating pom versions and creating git tags
      */
     private void prepareRelease(Config config, Grgit git) {
+        InvocationResult mavenResult
         InvocationRequest releaseVersionRequest = new DefaultInvocationRequest(
                 pomFile: new File(config.projectDir, "pom.xml"),
                 goals: ['versions:set'],
@@ -141,7 +143,10 @@ class Libero {
             println "Tag: ${config.releaseName} already exists. Either this version has already been released, or it failed to complete before"
             System.exit(1)
         }
-        maven.execute(releaseVersionRequest)
+        mavenResult = maven.execute(releaseVersionRequest)
+        if (mavenResult.getExitCode() != 0) {
+          throw new IllegalStateException( "Failed to update the pom version from ${config.startVersion} to ${config.releaseVersion}" );
+        }
         // Pre-Release property updates
         config.preProps.each { k, v ->
             util.executeCommand("sed -i '' \"s|<${k}>[^<>]*</${k}>|<${k}>${v}</${k}>|g\" pom.xml", config.projectDir)
@@ -150,7 +155,10 @@ class Libero {
         git.tag.add(name: config.releaseName)
 
         // create dev version
-        maven.execute(devVersionRequest)
+        mavenResult = maven.execute(devVersionRequest)
+        if (mavenResult.getExitCode() != 0) {
+            throw new IllegalStateException( "Failed to update the pom version from ${config.releaseVersion} to ${config.nextVersion}" );
+        }
         // Post-Release property updates
         config.postProps.each { k, v ->
             util.executeCommand("sed -i '' \"s|<${k}>[^<>]*</${k}>|<${k}>${v}</${k}>|g\" pom.xml", config.projectDir)
@@ -162,7 +170,7 @@ class Libero {
      * Executes the build and deploy of the release
      */
     private void runBuild(Options options, Config config, Grgit git) {
-
+        InvocationResult mavenResult
         InvocationRequest buildRequest = new DefaultInvocationRequest(
                 pomFile: new File(config.projectDir, "pom.xml"),
                 goals: ['clean', 'install'])
@@ -176,14 +184,19 @@ class Libero {
 
         // Check out the git tag
         git.checkout(branch: config.releaseName)
-        maven.execute(buildRequest)
-
+        mavenResult = maven.execute(buildRequest)
+        if (mavenResult.getExitCode() != 0) {
+            throw new IllegalStateException( "Release Build failed!!" );
+        }
         // TODO: dry run should either remove tags and reset, or provide advice on how to do so
         if (!options.dryRun) {
             if (config.mavenRepo) {
                 deployRequest.setProperties((quickBuildProps + [altDeploymentRepository: config.mavenRepo]) as Properties)
             }
-            maven.execute(deployRequest)
+            mavenResult = maven.execute(deployRequest)
+            if (mavenResult.getExitCode() != 0) {
+                throw new IllegalStateException( "Release deploy failed!!" );
+            }
             if (options.gitPush) {
                 git.push(remote: config.destRemote, tags: true, refsOrSpecs: [config.destBranch])
             }

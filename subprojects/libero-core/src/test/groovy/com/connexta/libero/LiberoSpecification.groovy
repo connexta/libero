@@ -27,7 +27,6 @@ class LiberoSpecification extends Specification {
     private Config configWithRepo
 
     def setup() {
-
         localRepo = tmp.newFolder('localRepo')
         remoteRepo = tmp.newFolder('remoteRepo')
         remoteM2 = tmp.newFolder('m2')
@@ -174,5 +173,15 @@ class LiberoSpecification extends Specification {
             localGit.branch.current.name
             def pom = new XmlSlurper().parse(new File(config.projectDir, "pom.xml"))
             pom.properties == "1.2.4-SNAPSHOT"
+    }
+
+    def "it should throw an exception when a build fails"() {
+        setup: "create config with invalid pom"
+            new File(localRepo.absolutePath, "pom.xml").delete()
+            Files.copy(this.getClass().getResourceAsStream('/gitRepo/bad_pom.xml'), Paths.get(localRepo.absolutePath, 'pom.xml'))
+        when:
+            libero.run(dryRunNoPushOptions, minimumConfig)
+        then:
+            thrown IllegalStateException
     }
 }
