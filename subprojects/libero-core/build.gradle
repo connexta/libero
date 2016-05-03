@@ -2,8 +2,6 @@ apply plugin: 'groovy'
 
 group = 'com.connexta.libero.core'
 
-println uploadArchives.toString()
-
 dependencies {
     compile 'org.codehaus.groovy:groovy-all:2.4.4'
     compile 'org.jyaml:jyaml:1.3'
