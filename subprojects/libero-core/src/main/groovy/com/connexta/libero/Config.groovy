@@ -17,6 +17,7 @@ class Config {
     String releaseName
 
     String mavenRepo
+    String mavenSettings
     Map preProps
     Map postProps
 
@@ -41,6 +42,7 @@ class Config {
             preProps = project.maven.properties."pre-release"
             postProps = project.maven.properties."post-release"
         }
+        mavenSettings = project.maven.settings
 
         // versions
         releaseVersion = project.versions.release
