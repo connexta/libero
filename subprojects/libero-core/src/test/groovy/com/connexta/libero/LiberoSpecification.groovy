@@ -144,7 +144,7 @@ class LiberoSpecification extends Specification {
     }
 
     @Ignore
-    def "it should update properties in prior to release"() {
+    def "it should update properties prior to release"() {
         setup: "create config with property replacements"
             def config = new Config(
                     projectDir: localRepo.absolutePath,
@@ -154,7 +154,7 @@ class LiberoSpecification extends Specification {
         when:
             libero.run(dryRunNoPushOptions, config)
         then:
-            localGit.checkout(branch: config.releaseName, orphan: true)
+            localGit.checkout(branch: config.releaseName)
             def pom = new XmlSlurper().parse(new File(config.projectDir, "pom.xml"))
             pom.properties == "1.2.3"
     }
@@ -179,6 +179,17 @@ class LiberoSpecification extends Specification {
         setup: "create config with invalid pom"
             new File(localRepo.absolutePath, "pom.xml").delete()
             Files.copy(this.getClass().getResourceAsStream('/gitRepo/bad_pom.xml'), Paths.get(localRepo.absolutePath, 'pom.xml'))
+        when:
+            libero.run(dryRunNoPushOptions, minimumConfig)
+        then:
+            thrown IllegalStateException
+    }
+
+    def "it should throw an exception when a git tag already exists"() {
+        setup: "create config and create tag"
+            println(localGit.tag.list())
+            libero.computeProperties(minimumConfig)
+            localGit.tag.add(name: minimumConfig.releaseName)
         when:
             libero.run(dryRunNoPushOptions, minimumConfig)
         then:

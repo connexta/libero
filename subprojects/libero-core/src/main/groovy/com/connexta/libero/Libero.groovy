@@ -1,6 +1,7 @@
 package com.connexta.libero
 
 import org.ajoberstar.grgit.Grgit
+import org.ajoberstar.grgit.exception.GrgitException
 import org.apache.maven.shared.invoker.DefaultInvocationRequest
 import org.apache.maven.shared.invoker.DefaultInvoker
 import org.apache.maven.shared.invoker.InvocationResult
@@ -8,8 +9,6 @@ import org.apache.maven.shared.invoker.InvocationRequest
 import org.apache.maven.shared.invoker.Invoker
 
 import java.text.SimpleDateFormat
-
-import static com.connexta.libero.Util.printConfig
 
 // TODO: What should be the process when the build fails? How should the fixes be handled?
 //       should that be part of the script? Should the script have an option to only do a build?
@@ -33,12 +32,15 @@ class Libero {
             skipTests        : "true"
     ]
 
-    public void run(Options options, Config config) {
+    /**
+     * Computes all derived configuration values and replaces any property usages.
+     * @param config
+     */
+    public void computeProperties(Config config) {
 
         // Check that projectDir is set and exists
         if (!config.projectDir && !(new File(config.projectDir).exists())) {
-            println "Project Directory: ${config.projectDir} is invalid"
-            System.exit(1)
+            throw new RuntimeException("Project Directory: ${config.projectDir} is invalid")
         }
 
         Grgit git = Grgit.open(dir: config.projectDir)
@@ -50,34 +52,28 @@ class Libero {
         finalizeConfig(config)
 
         Date date = new Date()
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HHmmss'Z'");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HHmmss'Z'")
         config.projectProperties.date = date
         config.projectProperties.timestamp = dateFormat.format(date)
 
-        // Replace property references prior to running
         config.resolveProperties()
+        git.close()
+        config.projectProperties.computed = true
+    }
 
-        if (!options.force) {
-
-            println "Preparing for Release Cycle!"
-            printConfig(options, config)
-
-            //TODO: should probably move this to the cli class
-            def USER_CONFIRMED = System.console().readLine 'Do you wish to continue? [y/N]: ' as String
-            switch (USER_CONFIRMED) {
-                case "n":
-                    System.exit(1)
-                    break
-                case "y":
-                    executeRelease(options, config, git)
-                    break
-                default:
-                    println "Response must be either [y/n]"
-                    System.exit(1)
-            }
-        } else {
-            executeRelease(options, config, git)
+    /**
+     * Starts the release process
+     * @param options
+     * @param config
+     */
+    public void run(Options options, Config config) {
+        if (!config.projectProperties.computed) {
+            computeProperties(config)
         }
+
+        Grgit git = Grgit.open(dir: config.projectDir)
+        executeRelease(options, config, git)
+
         git.checkout(branch: config.originalBranch)
     }
 
@@ -137,22 +133,24 @@ class Libero {
                 goals: ['versions:set'],
                 properties: [newVersion: config.nextVersion, generateBackupPoms: "false"])
 
-        // Check if tag exists already
-        List tags = git.tag.list()
-        if (tags.contains(config.releaseName)) {
-            println "Tag: ${config.releaseName} already exists. Either this version has already been released, or it failed to complete before"
-            System.exit(1)
+        if (config.mavenSettings) {
+            releaseVersionRequest.setUserSettingsFile(config.mavenSettings)
+            devVersionRequest.setUserSettingsFile(config.mavenSettings)
         }
+
         mavenResult = maven.execute(releaseVersionRequest)
         if (mavenResult.getExitCode() != 0) {
           throw new IllegalStateException( "Failed to update the pom version from ${config.startVersion} to ${config.releaseVersion}" );
         }
         // Pre-Release property updates
-        config.preProps.each { k, v ->
-            util.executeCommand("sed -i '' \"s|<${k}>[^<>]*</${k}>|<${k}>${v}</${k}>|g\" pom.xml", config.projectDir)
-        }
+        updateProps(config.preProps, config.projectDir)
         git.commit(message: "[libero] prepare release ${config.releaseName}", all: true)
-        git.tag.add(name: config.releaseName)
+        try {
+            git.tag.add(name: config.releaseName)
+        } catch (GrgitException e) {
+            throw new IllegalStateException("Tag: ${config.releaseName} already exists. " +
+                    "Either this version has already been released, or it failed to complete before")
+        }
 
         // create dev version
         mavenResult = maven.execute(devVersionRequest)
@@ -160,13 +158,10 @@ class Libero {
             throw new IllegalStateException( "Failed to update the pom version from ${config.releaseVersion} to ${config.nextVersion}" );
         }
         // Post-Release property updates
-        config.postProps.each { k, v ->
-            util.executeCommand("sed -i '' \"s|<${k}>[^<>]*</${k}>|<${k}>${v}</${k}>|g\" pom.xml", config.projectDir)
-        }
+        updateProps(config.postProps, config.projectDir)
         git.commit(message: "[libero] prepare for next development iteration", all: true)
     }
-
-    /**
+/**
      * Executes the build and deploy of the release
      */
     private void runBuild(Options options, Config config, Grgit git) {
@@ -181,6 +176,11 @@ class Libero {
                 pomFile: new File(config.projectDir, "pom.xml"),
                 goals: ['deploy'],
                 properties: quickBuildProps)
+
+        if (config.mavenSettings) {
+            buildRequest.setUserSettingsFile(config.mavenSettings)
+            deployRequest.setUserSettingsFile(config.mavenSettings)
+        }
 
         // Check out the git tag
         git.checkout(branch: config.releaseName)
@@ -205,5 +205,19 @@ class Libero {
         git.checkout(branch: config.originalBranch)
 
         println "Release Process Complete!!"
+    }
+
+    private void updateProps(Map props, String directory) {
+        File pom = new File(directory, "pom.xml")
+        def xml = new XmlParser().parse(pom)
+        props.each { k, v ->
+            if (xml.properties."${k}" != null) {
+                Node node = xml.properties."${k}"[0]
+                node.setValue("${v}")
+            }
+            XmlNodePrinter printer = new XmlNodePrinter(new PrintWriter(new FileWriter(pom)))
+            printer.preserveWhitespace = true
+            printer.print(xml)
+        }
     }
 }

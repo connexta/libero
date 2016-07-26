@@ -8,6 +8,8 @@ import com.connexta.libero.Util
 import java.nio.file.Path
 import java.nio.file.Paths
 
+import static com.connexta.libero.Util.printConfig
+
 def run(args) {
     final Libero libero = new Libero()
     final Util util = new Util()
@@ -28,6 +30,7 @@ def run(args) {
         b longOpt: 'dest-branch', args: 1, argName: 'destBranch', 'Branch to push to on the destination remote'
         _ longOpt: 'pre-props', args: 1, argName: 'preProps', 'comma separated list of pre-release property updates, specify in the form "propertyName=propertyValue"'
         _ longOpt: 'post-props', args: 1, argName: 'postProps', 'comma separated list of post-release property updates, specify in the form "propertyName=propertyValue"'
+        _ longOpt: 'settings', args: 1, argName: 'maven settings', 'path to alternate maven settings file to use'
 
         h longOpt: 'help', 'Show usage information'
         p longOpt: 'push', 'Push commits and tags'
@@ -86,8 +89,32 @@ def run(args) {
     config.postProps = util.stringToMap(options."post-props") ?: config.postProps
     config.releaseVersion = options.v ?: config.releaseVersion
     config.nextVersion = options.n ?: config.nextVersion
+    config.mavenSettings = options."settings" ?: config.mavenSettings
 
-    libero.run(liberoOptions, config)
+    if (liberoOptions.force) {
+        libero.computeProperties(config)
+        printConfig(liberoOptions, config)
+        libero.run(liberoOptions, config)
+    } else {
+        libero.computeProperties(config)
+
+        println "Preparing for Release Cycle!"
+        printConfig(liberoOptions, config)
+
+        def USER_CONFIRMED = System.console().readLine 'Do you wish to continue? [y/N]: ' as String
+        switch (USER_CONFIRMED) {
+            case "n":
+                System.exit(1)
+                break
+            case "y":
+                libero.run(options, config)
+                break
+            default:
+                println "Response must be either [y/n]"
+                System.exit(1)
+        }
+    }
+
 }
 
 run(args)
