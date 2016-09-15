@@ -37,6 +37,72 @@ installed distribution will be under `build/install`
   * config files can be specified as a parameter
   * searches in `<projectdir>/.libero.yml`
   * searches in `~/.libero/<project-name>/.libero.yml`
+  
+## Cleaning local artifacts
+
+Libero now supports cleaning artifacts from the local repo prior to building the project
+
+Artifacts can be cleaned by providing the `project.maven.repo.clean` property with a list of comma separated group ids
+Any artifact located at or below that group id depth will be deleted
+
+## Using an alternate local maven repository
+
+An alternate local maven repo can be configured by providing the `project.maven.repo.local` property with a path to use for a local repository
+
+## Alternate deployment repository
+
+Libero will deploy to the repository specified in the pom by default.
+To configure an alternate repository for deployment use the `project.maven.repo.remote` property.
+This property expects a value like `repositoryId::format::url`. If authentication is required, repository id should match a server from the maven settings file
+
+## Custom profiles
+
+Libero can be configured to activate a set of profiles during the execution of the release phase.
+
+Provide a comma separated list in `project.maven.profiles`
+
+## Custom settings file
+
+Libero can be configured to use a custom maven settings file for any maven operations.
+
+Provide a location of a maven settings file to `project.maven.settings`
+
+## Pom Property replacement
+
+Libero can replace property values in the root level project pom before and after release.
+
+To accomplish this use the `project.maven.properties` property.
+
+This has two sub-properties `pre-release` and `post-release` that take in `name: value` pairs.
+
+```yaml
+project:
+  ...
+  maven:
+    properties:
+      pre-release:
+        foo.version: 1.0.0
+        bar.version: 1.2.0
+      post-release:
+        foo.version: 1.0.1-SNAPSHOT
+        bar.version: 1.2.1-SNAPSHOT
+  ...
+```
+
+## Custom git commit prefix
+
+Libero defaults to creating git commits with the prefix `"[libero]"`, 
+this can be changed using the `project.git.message.prefix`
+
+## Project properties
+
+There are several properties that are generated when the project is analyzed at begginning of the run.
+These properties can be used in config files and in cli paramaters. 
+
+Usage: `${name}`
+
+* `timestamp`: Date and time the run was started, format is `YYYY-MM-DDThhmmssZ`
+* `baseVersion`: Starting version of the project, stripped of `SNAPSHOT`
 
 ## Cli
 
@@ -86,7 +152,7 @@ I Release You!
  -v,--release-version <releaseVersion>   Target version for the release
 ```
 
-## Config file
+## Config File Reference
 
 ```yaml
  project:
@@ -97,8 +163,14 @@ I Release You!
      destination:
        remote: "origin"
        branch: "master"
+     message:
+       prefix: "[release]"
    maven:
-     repo: "releases:default:http://nexus.fake.site/nexus/content/repositories/releases/"
+     repo:
+       local: "/path/to/local/repo"
+       remote: "releases::default::http://nexus.fake.site/nexus/content/repositories/releases/"
+       clean: "foo.bar,baz.qux"
+     profiles: "release"
      properties:
        pre-release:
          foo.property: "barValue"
@@ -106,6 +178,6 @@ I Release You!
        post-release:
          this: "that"
    versions:
-     release: "1.2.3"
+     release: "1.2.3-${timestamp}"
      development: "1.2.4-SNAPSHOT"
 ```

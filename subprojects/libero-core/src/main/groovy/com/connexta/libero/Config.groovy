@@ -10,14 +10,18 @@ class Config {
     String destRemote
     String ref
     String destBranch
+    String commitPrefix
 
     String startVersion
     String releaseVersion
     String nextVersion
     String releaseName
 
+    String localRepo
     String mavenRepo
     String mavenSettings
+    String cleanArtifacts
+    List<String> profiles
     Map preProps
     Map postProps
 
@@ -31,18 +35,27 @@ class Config {
         def project = load(configFile).project
 
         // Git settings
-        sourceRemote = project.git.source.remote
-        ref = project.git.source.ref
-        destRemote = project.git.destination.remote
-        destBranch = project.git.destination.branch
+        def gitSettings = project.git
+        sourceRemote = gitSettings.source.remote
+        ref = gitSettings.source.ref
+        destRemote = gitSettings.destination.remote
+        destBranch = gitSettings.destination.branch
+        if (gitSettings.containsKey("message")) {
+            commitPrefix = gitSettings.message.prefix
+        }
 
         // Maven settings
-        mavenRepo = project.maven.repo
+        if (project.maven.repo.containsKey("local")) {
+            localRepo = project.maven.repo.local
+        }
+        mavenRepo = project.maven.repo.remote
         if (project.maven.containsKey("properties")) {
             preProps = project.maven.properties."pre-release"
             postProps = project.maven.properties."post-release"
         }
         mavenSettings = project.maven.settings
+        cleanArtifacts = project.maven.repo.clean
+        profiles = project.maven.profiles
 
         // versions
         releaseVersion = project.versions.release

@@ -8,7 +8,8 @@ project:
       branch: "master"
       push: false
   maven:
-    repo: "foo::default::https://bar.baz/nexus/content/repositories/releases/"
+    repo:
+      remote: "foo::default::https://bar.baz/nexus/content/repositories/releases/"
     quickbuild: false
   settings:
     dryRun: false
