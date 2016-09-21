@@ -1,7 +1,9 @@
 package com.connexta.libero
 
+import groovy.util.logging.Slf4j
 import org.ajoberstar.grgit.Grgit
 import org.ajoberstar.grgit.exception.GrgitException
+import org.ajoberstar.grgit.operation.ResetOp
 import org.apache.maven.shared.invoker.DefaultInvocationRequest
 import org.apache.maven.shared.invoker.DefaultInvoker
 import org.apache.maven.shared.invoker.InvocationResult
@@ -14,10 +16,10 @@ import java.text.SimpleDateFormat
 //       should that be part of the script? Should the script have an option to only do a build?
 // TODO: Add option to clone the repository
 // TODO: Check if remote is a url or just a name
-// TODO: add option to clean artifacts from local .m2
 // TODO: add verification step for git ref
 //  see git rev-parse for validation
 
+@Slf4j
 class Libero {
 
     private final Util util = new Util()
@@ -88,6 +90,9 @@ class Libero {
         config.destBranch = config.destBranch ?: 'master'
         config.preProps = config.preProps ?: [:]
         config.postProps = config.postProps ?: [:]
+        if (!config.mavenSettings) {
+            log.warn("No Maven Settings file provided! - THIS WILL USE DEFAULT MAVEN SETTINGS FILE")
+        }
     }
 
     /**
@@ -108,6 +113,7 @@ class Libero {
         config.releaseVersion = config.releaseVersion ?: util.getBaseVersion(config.startVersion)
         config.nextVersion = config.nextVersion ?: util.incrementVersion(config.releaseVersion)
         config.releaseName = config.releaseName ?: "${config.projectName}-${config.releaseVersion}"
+        config.commitPrefix = config.commitPrefix ?: '[libero]'
     }
 
     /**
@@ -115,8 +121,33 @@ class Libero {
      * @return
      */
     private void executeRelease(Options options, Config config, Grgit git) {
+        prepareMavenEnvironment(config)
         prepareRelease(config, git)
         runBuild(options, config, git)
+    }
+
+    private void prepareMavenEnvironment(Config config) {
+        InvocationResult prepResult
+
+
+        if (config.cleanArtifacts && !config.localRepo) {
+            InvocationRequest cleanLocalArtifacts = new DefaultInvocationRequest(
+                    pomFile: new File(config.projectDir, "pom.xml"),
+                    goals: ['dependency:purge-local-repository'],
+                    properties: [
+                            manualInclude: config.cleanArtifacts,
+                            actTransitively: 'false',
+                            reResolve: 'false',
+                            resolutionFuzziness: 'groupId'
+                    ]
+            )
+
+            log.info("Cleaning artifacts from local maven repo matching: ${config.cleanArtifacts}")
+            prepResult = maven.execute(cleanLocalArtifacts)
+            if (prepResult.getExitCode() != 0) {
+                throw new IllegalStateException("Failed to clean up artifacts matching groupId(s): ${config.cleanArtifacts}")
+            }
+        }
     }
 
     /**
@@ -133,21 +164,30 @@ class Libero {
                 goals: ['versions:set'],
                 properties: [newVersion: config.nextVersion, generateBackupPoms: "false"])
 
+        if (config.localRepo) {
+            log.info("Using local repository: ${config.localRepo}")
+            releaseVersionRequest.setLocalRepositoryDirectory(new File(config.localRepo))
+            devVersionRequest.setLocalRepositoryDirectory(new File(config.localRepo))
+        }
+
         if (config.mavenSettings) {
+            log.info("Using maven Settings file: ${config.mavenSettings}")
             releaseVersionRequest.setUserSettingsFile(config.mavenSettings)
             devVersionRequest.setUserSettingsFile(config.mavenSettings)
         }
 
         mavenResult = maven.execute(releaseVersionRequest)
         if (mavenResult.getExitCode() != 0) {
+            log.error("Could not update pom version due to: ${mavenResult.executionException}")
           throw new IllegalStateException( "Failed to update the pom version from ${config.startVersion} to ${config.releaseVersion}" );
         }
         // Pre-Release property updates
         updateProps(config.preProps, config.projectDir)
-        git.commit(message: "[libero] prepare release ${config.releaseName}", all: true)
+        git.commit(message: "${config.commitPrefix} prepare release ${config.releaseName}", all: true)
         try {
             git.tag.add(name: config.releaseName)
         } catch (GrgitException e) {
+            log.error("Tag name already exists, please delete before running: 'git tag delete ${config.releaseName}'")
             throw new IllegalStateException("Tag: ${config.releaseName} already exists. " +
                     "Either this version has already been released, or it failed to complete before")
         }
@@ -155,11 +195,12 @@ class Libero {
         // create dev version
         mavenResult = maven.execute(devVersionRequest)
         if (mavenResult.getExitCode() != 0) {
+            log.error("Couldn't update pom version due to: ${mavenResult.executionException}")
             throw new IllegalStateException( "Failed to update the pom version from ${config.releaseVersion} to ${config.nextVersion}" );
         }
         // Post-Release property updates
         updateProps(config.postProps, config.projectDir)
-        git.commit(message: "[libero] prepare for next development iteration", all: true)
+        git.commit(message: "${config.commitPrefix} prepare for next development iteration", all: true)
     }
 /**
      * Executes the build and deploy of the release
@@ -169,7 +210,14 @@ class Libero {
         InvocationRequest buildRequest = new DefaultInvocationRequest(
                 pomFile: new File(config.projectDir, "pom.xml"),
                 goals: ['clean', 'install'])
+
+        if (config.profiles) {
+            log.debug("Maven profiles: ${config.profiles}")
+            buildRequest.setProfiles(config.profiles)
+        }
+
         if (options.quickBuild) {
+            log.debug("Maven Quick Build requested, should only use this for testing purposes!")
             buildRequest.setProperties(quickBuildProps)
         }
         InvocationRequest deployRequest = new DefaultInvocationRequest(
@@ -177,7 +225,14 @@ class Libero {
                 goals: ['deploy'],
                 properties: quickBuildProps)
 
+        if (config.localRepo) {
+            log.info("Using local repository: ${config.localRepo}")
+            buildRequest.setLocalRepositoryDirectory(new File(config.localRepo))
+            deployRequest.setLocalRepositoryDirectory(new File(config.localRepo))
+        }
+
         if (config.mavenSettings) {
+            log.info("Using maven Settings file: ${config.mavenSettings}")
             buildRequest.setUserSettingsFile(config.mavenSettings)
             deployRequest.setUserSettingsFile(config.mavenSettings)
         }
@@ -186,15 +241,16 @@ class Libero {
         git.checkout(branch: config.releaseName)
         mavenResult = maven.execute(buildRequest)
         if (mavenResult.getExitCode() != 0) {
+            log.error("Release Build Failed due to: ${mavenResult.executionException}")
             throw new IllegalStateException( "Release Build failed!!" );
         }
-        // TODO: dry run should either remove tags and reset, or provide advice on how to do so
         if (!options.dryRun) {
             if (config.mavenRepo) {
                 deployRequest.setProperties((quickBuildProps + [altDeploymentRepository: config.mavenRepo]) as Properties)
             }
             mavenResult = maven.execute(deployRequest)
             if (mavenResult.getExitCode() != 0) {
+                log.error("Release Deploy Failed due to: ${mavenResult.executionException}")
                 throw new IllegalStateException( "Release deploy failed!!" );
             }
             if (options.gitPush) {
@@ -204,7 +260,15 @@ class Libero {
 
         git.checkout(branch: config.originalBranch)
 
-        println "Release Process Complete!!"
+        log.info("Release Process Complete!!")
+        if (options.dryRun) {
+            log.info("Cleaning up after Dry Run! - resetting to: ${config.sourceRemote}/${config.ref}' and removing tag: ${config.releaseName}")
+            git.reset(commit: "${config.sourceRemote}/${config.ref}", mode: ResetOp.Mode.HARD)
+            git.tag.remove(names: ["${config.releaseName}"])
+        } else if (!options.gitPush) {
+            log.warn("FYI, you chose not to push commits/tags during the release process. Please remember to do so " +
+                    "manually. Commits not pushed are located on ${config.destBranch} and a local tag ${config.releaseName} should be pushed to the desired remote")
+        }
     }
 
     private void updateProps(Map props, String directory) {
@@ -214,6 +278,7 @@ class Libero {
             if (xml.properties."${k}" != null) {
                 Node node = xml.properties."${k}"[0]
                 node.setValue("${v}")
+                log.debug("Updating pom property: ${k} with value: ${v}")
             }
             XmlNodePrinter printer = new XmlNodePrinter(new PrintWriter(new FileWriter(pom)))
             printer.preserveWhitespace = true

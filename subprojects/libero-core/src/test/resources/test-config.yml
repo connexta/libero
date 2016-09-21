@@ -7,9 +7,17 @@ project:
       remote: "origin"
       branch: "master"
       push: false
+    message:
+      prefix: "[foo]"
+      pre: "getting ready"
+      post: "done"
   maven:
-    repo: "foo::default::https://bar.baz/nexus/content/repositories/releases/"
+    repo:
+      remote: "foo::default::https://bar.baz/nexus/content/repositories/releases/"
     quickbuild: false
+    profiles:
+      - 'foo'
+      - 'bar'
   settings:
     dryRun: false
     force: false

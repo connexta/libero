@@ -1,6 +1,7 @@
 package com.connexta.libero
 
 import org.ajoberstar.grgit.BranchStatus
+import org.ajoberstar.grgit.Commit
 import org.ajoberstar.grgit.Grgit
 import org.ajoberstar.grgit.Tag
 import org.junit.Rule
@@ -51,7 +52,7 @@ class LiberoSpecification extends Specification {
 
     def "it should checkout the default branch when none is provided"() {
         when:
-            libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
             localGit.branch.current.name == "master"
     }
@@ -61,28 +62,28 @@ class LiberoSpecification extends Specification {
             def releaseVersion = "1.0.0"
             def nextVersion = "1.0.1-SNAPSHOT"
         when:
-            libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
-            minimumConfig.releaseVersion == releaseVersion
-            minimumConfig.nextVersion == nextVersion
+            configWithRepo.releaseVersion == releaseVersion
+            configWithRepo.nextVersion == nextVersion
     }
 
     def "it should perform a pull for the source branch"() {
         when:
-            libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
-            BranchStatus localMaster = localGit.branch.status(name: minimumConfig.ref)
+            BranchStatus localMaster = localGit.branch.status(name: configWithRepo.ref)
             localMaster.behindCount == 0
     }
 
     def "it should create commits/tags for the release and development version"() {
         when:
-            libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
-            BranchStatus localMaster = localGit.branch.status(name: minimumConfig.ref)
+            BranchStatus localMaster = localGit.branch.status(name: configWithRepo.ref)
             Tag[] tags = localGit.tag.list()
             localMaster.aheadCount == 2
-            tags[0].name == minimumConfig.releaseName
+            tags[0].name == configWithRepo.releaseName
     }
 
     def "it should push commits/tags to the remote branch"() {
@@ -133,14 +134,13 @@ class LiberoSpecification extends Specification {
 
     def "it should create a tag containing the resolved release version when a release version conatins a property reference"() {
         setup: "creating config with release properties"
-        minimumConfig.releaseVersion = '${baseVersion}-${timestamp}'
-        minimumConfig.nextVersion = '${baseVersion}-SNAPSHOT'
-
+            configWithRepo.releaseVersion = '${baseVersion}-${timestamp}'
+            configWithRepo.nextVersion = '${baseVersion}-SNAPSHOT'
         when:
-        libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
-        minimumConfig.releaseName == "${minimumConfig.projectName}-${minimumConfig.projectProperties.baseVersion}-${minimumConfig.projectProperties.timestamp}"
-        minimumConfig.nextVersion == "${minimumConfig.projectProperties.baseVersion}-SNAPSHOT"
+            configWithRepo.releaseName == "${configWithRepo.projectName}-${configWithRepo.projectProperties.baseVersion}-${configWithRepo.projectProperties.timestamp}"
+            configWithRepo.nextVersion == "${configWithRepo.projectProperties.baseVersion}-SNAPSHOT"
     }
 
     @Ignore
@@ -180,19 +180,49 @@ class LiberoSpecification extends Specification {
             new File(localRepo.absolutePath, "pom.xml").delete()
             Files.copy(this.getClass().getResourceAsStream('/gitRepo/bad_pom.xml'), Paths.get(localRepo.absolutePath, 'pom.xml'))
         when:
-            libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
             thrown IllegalStateException
     }
 
     def "it should throw an exception when a git tag already exists"() {
         setup: "create config and create tag"
-            println(localGit.tag.list())
             libero.computeProperties(minimumConfig)
             localGit.tag.add(name: minimumConfig.releaseName)
         when:
-            libero.run(dryRunNoPushOptions, minimumConfig)
+            libero.run(noPushOptions, configWithRepo)
         then:
             thrown IllegalStateException
+    }
+
+    def "it should allow a custom commit prefix"() {
+        setup: "create config"
+            configWithRepo.commitPrefix = '[foo]'
+            libero.computeProperties(configWithRepo)
+
+            String expectedHeadMessage = "${configWithRepo.commitPrefix} prepare for next development iteration"
+            String expectedTagMessage = "${configWithRepo.commitPrefix} prepare release ${configWithRepo.releaseName}"
+        when:
+            libero.run(noPushOptions, configWithRepo)
+        then:
+            List<Commit> history = localGit.log(maxCommits: 3)
+            Commit headCommit = history[0]
+            Commit tagCommit = history[1]
+            tagCommit.fullMessage == expectedTagMessage
+            headCommit.fullMessage == expectedHeadMessage
+    }
+
+    def "it should clean up after a dry run"() {
+        setup: "create config with dry run"
+            libero.computeProperties(minimumConfig)
+            List<Commit> origHistory = localGit.log(maxCommits: 3)
+            List<Tag> origTags = localGit.tag.list()
+        when:
+            libero.run(dryRunNoPushOptions, minimumConfig)
+        then:
+            List<Commit> history = localGit.log(maxCommits: 3)
+            List<Tag> tags = localGit.tag.list()
+            history == origHistory
+            tags == origTags
     }
 }
