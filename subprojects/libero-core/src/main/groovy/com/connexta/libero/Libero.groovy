@@ -172,8 +172,8 @@ class Libero {
 
         if (config.mavenSettings) {
             log.info("Using maven Settings file: ${config.mavenSettings}")
-            releaseVersionRequest.setUserSettingsFile(config.mavenSettings)
-            devVersionRequest.setUserSettingsFile(config.mavenSettings)
+            releaseVersionRequest.setUserSettingsFile(new File(config.mavenSettings))
+            devVersionRequest.setUserSettingsFile(new File(config.mavenSettings))
         }
 
         mavenResult = maven.execute(releaseVersionRequest)
@@ -233,8 +233,8 @@ class Libero {
 
         if (config.mavenSettings) {
             log.info("Using maven Settings file: ${config.mavenSettings}")
-            buildRequest.setUserSettingsFile(config.mavenSettings)
-            deployRequest.setUserSettingsFile(config.mavenSettings)
+            buildRequest.setUserSettingsFile(new File(config.mavenSettings))
+            deployRequest.setUserSettingsFile(new File(config.mavenSettings))
         }
 
         // Check out the git tag
